@@ -1,14 +1,11 @@
 from pytube import Playlist
 from pytube import YouTube
 from os import path
-from os import chdir
 from os import listdir
 from os import getcwd
 from os import remove
 import requests
 import threading
-import sys
-import ffmpeg
 from tkinter import *
 import tkinter.filedialog as fd
 from functools import partial
