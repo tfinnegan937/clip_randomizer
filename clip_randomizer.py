@@ -3,12 +3,15 @@ from pytube import YouTube
 from os import path
 from os import chdir
 from os import getcwd
+from os import remove
 import requests
 import threading
 import sys
-
+import ffmpeg
 from tkinter import *
+import tkinter.filedialog as fd
 from functools import partial
+import moviepy.editor as mp
 
 home_dir = getcwd()
 
@@ -26,6 +29,8 @@ class YTRandomizer(Frame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         enter = Button(self)
+        vid_browse = Button(self)
+        clip_browse = Button(self)
         link_entry = Entry(self)
         link_label = Label(self, text="Playlist")
         video_out_entry = Entry(self)
@@ -33,20 +38,27 @@ class YTRandomizer(Frame):
         clip_out_entry = Entry(self)
         clip_out_label = Label(self, text="Clip Output Folder")
         feedback_label = Label(self, text="Press Run to Start")
-        enter.configure(text="RUN", command=partial(self.thread_cut_videos, enter, link_entry, video_out_entry, clip_out_entry))
-
+        enter.configure(text="RUN", command=partial(self.thread_cut_videos, enter, link_entry, video_out_entry, clip_out_entry, vid_browse, clip_browse))
+        vid_browse.configure(text="Browse", command=partial(self.browseFolders, video_out_entry))
+        clip_browse.configure(text="Browse", command=partial(self.browseFolders, clip_out_entry))
         link_label.grid(row=0, column=0)
         link_entry.grid(row=0, column=1)
         video_out_label.grid(row=1, column=0)
         video_out_entry.grid(row=1, column=1)
+        vid_browse.grid(row=1, column=2)
         clip_out_label.grid(row=2, column=0)
         clip_out_entry.grid(row=2, column=1)
+        clip_browse.grid(row=2, column=2)
         enter.grid(row=3, column=2)
         feedback_label.grid(row=4, column=2)
 
 
+    def browseFolders(self, field):
+        folder = fd.askdirectory()
+        field.delete(0, 'end')
+        field.insert(0, folder)
 
-    def cut_videos(self, button, pentry, videntry, clipentry):
+    def cut_videos(self, button, pentry, videntry, clipentry, v_browse, c_browse):
         print("here1")
         feedback = Label(self, textvariable=self.text)
         feedback.grid(row=4, column=0)
@@ -54,7 +66,8 @@ class YTRandomizer(Frame):
         pentry.configure(state=DISABLED)
         videntry.configure(state=DISABLED)
         clipentry.configure(state=DISABLED)
-
+        v_browse.configure(state=DISABLED)
+        c_browse.configure(state=DISABLED)
         link = pentry.get()
         vid_out = videntry.get()
         clip_out = clipentry.get()
@@ -73,43 +86,58 @@ class YTRandomizer(Frame):
         else:
             playlist = Playlist(link)
             videos_processed = 1
-            chdir(vid_out)
             for video in playlist:
                 self.text.set("Downloading video " + str(videos_processed) + "/" + str(len(playlist)))
-                try:
-                    vid = YouTube(video).streams.filter(res="720p", audio_codec="mp4a.40.2")
-                    print(str(YouTube(video).streams.filter(audio_codec="mp4a.40.2")))
-                except:
-                    print("ERROR HANDLED")
-                    try:
-                        vid = YouTube(video).streams.get_highest_resolution()
-                    except:
-                        print("HANDLING FAILED")
-                if len(vid) == 0:
-                    try:
-                        vid = YouTube(video).streams.get_highest_resolution()
-                    except:
-                        print("HANDLING FAILED 2")
-
-                try:
-                    vid[0].download()
-                except:
-                    try:
-                        vid.download()
-                    except:
-                        print(video)
+                self.download_best(video, vid_out)
                 videos_processed = videos_processed + 1
         self.text.set("Done")
 
         button.configure(state=ACTIVE)
+        v_browse.configure(state=ACTIVE)
+        c_browse.configure(state=ACTIVE)
         pentry.configure(state=NORMAL)
         videntry.configure(state=NORMAL)
         clipentry.configure(state=NORMAL)
 
-    def thread_cut_videos(self, button, pentry, videntry, clipentry):
-        threading.Thread(target=self.cut_videos, args=(button, pentry, videntry, clipentry)).start()
+    def thread_cut_videos(self, button, pentry, videntry, clipentry, v_browse, c_browse):
+        threading.Thread(target=self.cut_videos, args=(button, pentry, videntry, clipentry, v_browse, c_browse)).start()
 
+    def download_best(self, video, video_out):
+        try:
+            vid = YouTube(video).streams.filter(adaptive=True, res="720p")[0]
+        except:
+            vid = YouTube(video).streams.filter(adaptive=True, res="720p")
+        try:
+            aud = YouTube(video).streams.get_audio_only()[0]
+        except:
+            aud = YouTube(video).streams.get_audio_only()
 
+        title = YouTube(video).title
+        title = title.replace(" ", "-")
+        title = title.replace(".", "-")
+        audio_name = title + "_aud"
+        video_name = title + "_vid"
+        try:
+            vid.download(output_path=video_out, filename=video_name)
+            aud.download(output_path=video_out, filename=audio_name)
+
+            audio_path = video_out + "/" + audio_name + ".mp4"
+            video_path = video_out + "/" + video_name + ".mp4"
+            print(audio_path)
+            print(video_path)
+
+            video_input = mp.VideoFileClip(video_path)
+
+            video_input.write_videofile(video_out + "/" + title + ".mp4", audio=audio_path)
+            remove(audio_path)
+            remove(video_path)
+        except:
+            try:
+                remove(audio_path)
+                remove(video_path)
+            except:
+                print("No video clips to remove")
+            YouTube(video).streams.get_highest_resolution().download(output_path=video_out)
 
 
 
