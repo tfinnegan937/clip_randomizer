@@ -2,6 +2,7 @@ from pytube import Playlist
 from pytube import YouTube
 from os import path
 from os import chdir
+from os import listdir
 from os import getcwd
 from os import remove
 import requests
@@ -12,6 +13,7 @@ from tkinter import *
 import tkinter.filedialog as fd
 from functools import partial
 import moviepy.editor as mp
+import math
 
 home_dir = getcwd()
 
@@ -90,6 +92,11 @@ class YTRandomizer(Frame):
                 self.text.set("Downloading video " + str(videos_processed) + "/" + str(len(playlist)))
                 self.download_best(video, vid_out)
                 videos_processed = videos_processed + 1
+            clips_sliced = 1
+            for video in listdir(vid_out):
+                self.text.set("Slicing clip " + str(clips_sliced) + "/" + str(len(listdir(vid_out))))
+                self.cut_downloaded(video, clip_out, vid_out)
+                clips_sliced = clips_sliced + 1
         self.text.set("Done")
 
         button.configure(state=ACTIVE)
@@ -115,6 +122,9 @@ class YTRandomizer(Frame):
         title = YouTube(video).title
         title = title.replace(" ", "-")
         title = title.replace(".", "-")
+        title = title.replace("|", "-")
+        title = title.replace(":", "-")
+        title = title.replace(",", "-")
         audio_name = title + "_aud"
         video_name = title + "_vid"
         try:
@@ -131,6 +141,7 @@ class YTRandomizer(Frame):
             video_input.write_videofile(video_out + "/" + title + ".mp4", audio=audio_path)
             remove(audio_path)
             remove(video_path)
+            video_input.close()
         except:
             try:
                 remove(audio_path)
@@ -139,7 +150,26 @@ class YTRandomizer(Frame):
                 print("No video clips to remove")
             YouTube(video).streams.get_highest_resolution().download(output_path=video_out)
 
+    def cut_downloaded(self, clip, clip_out, vid_out):
+        clip_name = clip.split(".")[0]
+        file = vid_out + "/" + clip
 
+        full_video = mp.VideoFileClip(file)
+
+        secs = full_video.duration
+        print("secs: " + str(secs))
+        minutes = secs / 60
+
+        minutes = math.floor(minutes)
+        print("mins: " + str(minutes))
+        for minute in range(0, minutes):
+            sub_video = full_video.subclip(minute * 60, (minute + 1) * 60)
+            print(str(minute * 60) + "-" + str((minute + 1) * 60))
+            print(clip_out + "/" + clip_name + "_" + str(minute) + ".mp4")
+            sub_video.write_videofile(clip_out + "/" + clip_name + "_" + str(minute) + ".mp4")
+            sub_video.close()
+            full_video.close()
+            full_video = mp.VideoFileClip(file)
 
 root = Tk()
 def kill_all():
